@@ -24,6 +24,7 @@
     "insertRecordsFailed": "Failed to save records",
     "flashRecordsFailed": "Failed to update records",
     "chatError": "Chat error occurred",
+    "messageRoleError": "Error loading messages. Please refresh the page.",
     "memory_section_title": "User Memory",
     "memories": "Profiles",
     "events": "Events",

@@ -23,6 +23,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslations } from "next-intl";
+import { useState, useEffect } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
@@ -31,6 +33,63 @@ import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button
 import { useUserStore } from "@/stores/user";
 
 export const Thread: FC = () => {
+  const [hasError, setHasError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const t = useTranslations("common");
+
+  // Add error handling
+  useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      // Handle ThreadMessageLike or other UI errors
+      if (event.error?.message?.includes("Unknown message role") ||
+        event.error?.message?.includes("Assistant content part type")) {
+        setHasError(true);
+        setErrorMessage(event.error?.message || '');
+        toast.error(t("messageRoleError") || "Error loading messages. Please refresh the page.");
+        console.error("Thread message error:", event.error);
+        // Prevent the default error handler from showing
+        event.preventDefault();
+      }
+    };
+
+    window.addEventListener("error", handleError);
+    return () => window.removeEventListener("error", handleError);
+  }, [t]);
+
+  const handleReset = () => {
+    // Reset error state
+    setHasError(false);
+    setErrorMessage('');
+    // Reload the page
+    window.location.reload();
+  };
+
+  if (hasError) {
+    return (
+      <div className="bg-background flex h-full w-full flex-col items-center justify-center p-4">
+        <AlertTriangleIcon className="h-12 w-12 text-red-500 mb-4" />
+        <h2 className="text-xl font-semibold mb-2">Error Loading Messages</h2>
+        <p className="text-center text-muted-foreground mb-4">
+          There was a problem loading the message thread.
+        </p>
+        {errorMessage && (
+          <div className="bg-muted p-3 rounded-md mb-4 max-w-md text-sm font-mono overflow-auto">
+            {errorMessage}
+          </div>
+        )}
+        <div className="flex gap-2">
+          <Button
+            onClick={handleReset}
+            className="flex items-center gap-2"
+          >
+            <RefreshCwIcon className="h-4 w-4" />
+            Refresh Page
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <ThreadPrimitive.Root
       className="bg-background box-border flex h-full flex-col overflow-hidden"

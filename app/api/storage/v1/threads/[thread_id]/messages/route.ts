@@ -32,12 +32,60 @@ export async function GET(
     return new Response("Internal Server Error", { status: 500 });
   }
 
-  return new Response(
-    JSON.stringify(
-      res.data || {
-        messages: [],
+  // Validate and fix messages before returning them
+  const responseData = res.data || { messages: [] };
+
+  // Ensure each message in the array has a valid role
+  if (responseData.messages && Array.isArray(responseData.messages)) {
+    responseData.messages = responseData.messages.map((message: any) => {
+      try {
+        // Check if message content exists
+        if (!message.content) {
+          message.content = { role: 'user' };
+          return message;
+        }
+
+        // Handle string content by converting it to proper format
+        if (typeof message.content === 'string') {
+          try {
+            // Try to parse JSON string
+            const parsedContent = JSON.parse(message.content);
+            message.content = parsedContent;
+          } catch {
+            // If not valid JSON, treat as user message
+            message.content = {
+              role: 'user',
+              content: [{ type: 'text', text: message.content }]
+            };
+          }
+        }
+
+        // Now message.content should be an object
+        if (typeof message.content === 'object') {
+          // If role is missing or invalid, default to user
+          if (!message.content.role || !['user', 'assistant', 'system'].includes(message.content.role)) {
+            message.content.role = 'user';
+          }
+
+          // Ensure content array exists for AUI format
+          if (message.format === 'aui/v0' && (!Array.isArray(message.content.content) || message.content.content.length === 0)) {
+            message.content.content = [{ type: 'text', text: '' }];
+          }
+        }
+      } catch (err) {
+        console.error('Error processing message:', err);
+        // Provide a fallback valid message structure
+        message.content = {
+          role: 'user',
+          content: [{ type: 'text', text: 'Error loading message content' }]
+        };
       }
-    ),
+      return message;
+    });
+  }
+
+  return new Response(
+    JSON.stringify(responseData),
     {
       status: 200,
       headers: {
@@ -123,6 +171,19 @@ export async function POST(
   const { content, format, parent_id } = await req.json();
   if (!content || !format || parent_id === undefined || !thread_id) {
     return new Response("Bad Request", { status: 400 });
+  }
+
+  // Validate message content format
+  if (typeof content === 'object') {
+    // Ensure a valid role is present
+    if (!content.role || !['user', 'assistant', 'system'].includes(content.role)) {
+      content.role = 'user'; // Default to user if role is missing or invalid
+    }
+
+    // For aui/v0 format, ensure content array is present
+    if (format === 'aui/v0' && (!Array.isArray(content.content) || content.content.length === 0)) {
+      content.content = [{ type: 'text', text: '' }];
+    }
   }
 
   const res = await supabase.rpc("create_message", {
