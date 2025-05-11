@@ -1,43 +1,129 @@
-import { createClient } from "@/utils/supabase/server";
+import { NextResponse } from 'next/server'
+import { createClient } from '@/utils/supabase/server'
+import { ThreadRepository } from '@/utils/redis/thread-repository'
 
 /**
- * 修改消息状态
- * @param thread_id 线程ID
- * @param is_archive 是否归档
- * /v1/threads/thread_03MD9BixtUBRK13thC7t83uN
- * @example
- * {
- *   "is_archived": true
- * }
- * @returns 修改成功
+ * GET /api/storage/v1/threads/[thread_id]
+ * Retrieves a specific thread
  */
-export async function PUT(req: Request, { params }: { params: Promise<{ thread_id: string }> }) {
-  // get user from supabase
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data?.user) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+export async function GET(
+  request: Request,
+  { params }: { params: { thread_id: string } }
+) {
+  try {
+    // Get user from Supabase
+    const supabase = await createClient()
+    const { data, error } = await supabase.auth.getUser()
+    if (error || !data.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const userId = data.user.id
 
-  const { thread_id } = await params;
-  const { is_archived } = await req.json();
-  if (!thread_id || is_archived === undefined) {
-    return new Response("Bad Request", { status: 400 });
-  }
+    const threadId = params.thread_id
 
-  const res = await supabase.rpc("update_thread_archived", {
-    thread_id: thread_id,
-    archived: is_archived,
-    uid: data.user.id,
-  });
-  if (res.error) {
-    return new Response("Internal Server Error", { status: 500 });
-  }
+    // Get thread
+    const threadRepository = new ThreadRepository()
+    const thread = await threadRepository.getThreadById(threadId)
 
-  return new Response(JSON.stringify(res), {
-    status: 200,
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
+    // Check if thread exists and belongs to user
+    if (!thread || thread.user_id !== userId) {
+      return NextResponse.json({ error: 'Thread not found' }, { status: 404 })
+    }
+
+    return NextResponse.json({ thread })
+  } catch (error) {
+    console.error('Error retrieving thread:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * PATCH /api/storage/v1/threads/[thread_id]
+ * Updates a thread's title
+ */
+export async function PATCH(
+  request: Request,
+  { params }: { params: { thread_id: string } }
+) {
+  try {
+    // Get user from Supabase
+    const supabase = await createClient()
+    const { data, error } = await supabase.auth.getUser()
+    if (error || !data.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const userId = data.user.id
+
+    const threadId = params.thread_id
+
+    // Check if thread exists and belongs to user
+    const threadRepository = new ThreadRepository()
+    const thread = await threadRepository.getThreadById(threadId)
+
+    if (!thread || thread.user_id !== userId) {
+      return NextResponse.json({ error: 'Thread not found' }, { status: 404 })
+    }
+
+    // Get request body
+    const body = await request.json()
+    const { title } = body
+
+    if (!title) {
+      return NextResponse.json({ error: 'Title is required' }, { status: 400 })
+    }
+
+    // Update thread title
+    const updatedThread = await threadRepository.updateThreadTitle(threadId, title)
+
+    return NextResponse.json({ thread: updatedThread })
+  } catch (error) {
+    console.error('Error updating thread:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * DELETE /api/storage/v1/threads/[thread_id]
+ * Deletes a thread and all its messages
+ */
+export async function DELETE(
+  request: Request,
+  { params }: { params: { thread_id: string } }
+) {
+  try {
+    // Get user from Supabase
+    const supabase = await createClient()
+    const { data, error } = await supabase.auth.getUser()
+    if (error || !data.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const userId = data.user.id
+
+    const threadId = params.thread_id
+
+    // Check if thread exists and belongs to user
+    const threadRepository = new ThreadRepository()
+    const thread = await threadRepository.getThreadById(threadId)
+
+    if (!thread || thread.user_id !== userId) {
+      return NextResponse.json({ error: 'Thread not found' }, { status: 404 })
+    }
+
+    // Delete thread and all its messages
+    await threadRepository.deleteThread(threadId)
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error deleting thread:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
 }

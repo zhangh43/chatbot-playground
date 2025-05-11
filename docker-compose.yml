@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  # Redis for data storage
+  redis:
+    image: redis:alpine
+    container_name: memobase_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - memobase-network
+
+  # Frontend app
+  app:
+    build: .
+    container_name: memobase_app
+    ports:
+      - "3000:3000"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL}
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - memobase-network
+    command: >
+      bash -c "
+        node scripts/init-redis.js &&
+        npm start
+      "
+
+volumes:
+  redis_data:
+
+networks:
+  memobase-network:
+    driver: bridge 

@@ -1,73 +1,63 @@
-import { createClient } from "@/utils/supabase/server";
+import { NextResponse } from 'next/server'
+import { createClient } from '@/utils/supabase/server'
+import { ThreadRepository } from '@/utils/redis/thread-repository'
 
 /**
- * 获取线程列表
- * @returns 线程列表
+ * GET /api/storage/v1/threads
+ * Retrieves all threads for the current user
  */
 export async function GET() {
-  // get user from supabase
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data?.user) {
-    return new Response("Unauthorized", { status: 401 });
-  }
-
-  const res = await supabase.rpc("get_threads_for_user", {
-    uid: data.user.id,
-  });
-  if (res.error) {
-    return new Response("Internal Server Error", { status: 500 });
-  }
-
-  return new Response(
-    JSON.stringify(
-      res.data || {
-        threads: [],
-      }
-    ),
-    {
-      status: 200,
-      headers: {
-        "Content-Type": "application/json",
-      },
+  try {
+    // Get user from Supabase
+    const supabase = await createClient()
+    const { data, error } = await supabase.auth.getUser()
+    if (error || !data.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-  );
+    const userId = data.user.id
+
+    // Get all threads for the user
+    const threadRepository = new ThreadRepository()
+    const threads = await threadRepository.getThreadsByUser(userId)
+
+    return NextResponse.json({ threads })
+  } catch (error) {
+    console.error('Error retrieving threads:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
 }
 
 /**
- * 创建线程
- * @param last_message_at 最后一条消息的时间
- * @example
- * {
- *   "last_message_at": "2025-04-21T14:54:41.588Z"
- * }
- * @returns 线程ID
+ * POST /api/storage/v1/threads
+ * Creates a new thread
  */
-export async function POST(req: Request) {
-  // get user from supabase
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data?.user) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+export async function POST(request: Request) {
+  try {
+    // Get user from Supabase
+    const supabase = await createClient()
+    const { data, error } = await supabase.auth.getUser()
+    if (error || !data.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const userId = data.user.id
 
-  const { last_message_at } = await req.json();
-  if (!last_message_at) {
-    return new Response("Bad Request", { status: 400 });
-  }
+    // Get request body
+    const body = await request.json()
+    const { title = 'New Chat' } = body
 
-  const res = await supabase.rpc("create_thread", {
-    last_message_at,
-    uid: data.user.id,
-  });
-  if (res.error) {
-    return new Response("Internal Server Error", { status: 500 });
-  }
+    // Create new thread
+    const threadRepository = new ThreadRepository()
+    const thread = await threadRepository.createThread(userId, title)
 
-  return new Response(JSON.stringify(res.data), {
-    status: 200,
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
+    return NextResponse.json({ thread }, { status: 201 })
+  } catch (error) {
+    console.error('Error creating thread:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
 }

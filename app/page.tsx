@@ -88,6 +88,64 @@ export default function Page() {
     }
   };
 
+  useEffect(() => {
+    // Add debugging for AssistantCloud fetch calls and Supabase auth
+    const originalFetch = window.fetch;
+    window.fetch = async (url, options) => {
+      const urlString = url.toString();
+
+      // Debug Supabase auth requests
+      if (urlString.includes('supabase.co') || urlString.includes('auth')) {
+        console.log("Auth request:", urlString);
+        try {
+          const response = await originalFetch(url, options);
+          if (!response.ok) {
+            console.error(`Auth request error: ${response.status} ${response.statusText}`);
+            try {
+              const clonedResponse = response.clone();
+              const text = await clonedResponse.text();
+              console.error(`Auth response body: ${text.substring(0, 500)}`);
+            } catch (e) {
+              console.error("Could not read auth response body");
+            }
+          }
+          return response;
+        } catch (error) {
+          console.error("Auth request exception:", error);
+          throw error;
+        }
+      }
+
+      // Debug AssistantCloud requests
+      if (urlString.includes('/api/storage')) {
+        console.log("AssistantCloud fetch:", urlString);
+        try {
+          const response = await originalFetch(url, options);
+          if (!response.ok) {
+            console.error(`AssistantCloud fetch error: ${response.status} ${response.statusText}`);
+            try {
+              const clonedResponse = response.clone();
+              const text = await clonedResponse.text();
+              console.error(`Response body: ${text.substring(0, 500)}`);
+            } catch (e) {
+              console.error("Could not read response body");
+            }
+          }
+          return response;
+        } catch (error) {
+          console.error("AssistantCloud fetch exception:", error);
+          throw error;
+        }
+      }
+
+      return originalFetch(url, options);
+    };
+
+    return () => {
+      window.fetch = originalFetch;
+    };
+  }, []);
+
   const cloud = new AssistantCloud({
     baseUrl: `${process.env["NEXT_PUBLIC_BASE_URL"]}${process.env["NEXT_PUBLIC_BASE_PATH"] || ""
       }/api/storage`,

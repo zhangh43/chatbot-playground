@@ -1,50 +1,68 @@
 import jwt from "jsonwebtoken";
+import { NextResponse } from "next/server";
+
+const SECRET_KEY = process.env.JWT_SECRET || "your-secret-key";
 
 /**
- * 刷新令牌
- * @param refresh_token 刷新令牌
+ * POST /api/storage/v1/auth/tokens/refresh
+ * Refresh an existing token
+ * @param refresh_token The refresh token to use
  * @example
  * {
  *   "refresh_token": "refresh_0jovoiwjd1hU3l24iy4iGIXu"
  * }
- * @returns jwt token and refresh token
+ * @returns A new access token
  */
 export async function POST(req: Request) {
   try {
-    const { refresh_token } = await req.json();
+    console.log("Processing token refresh request");
 
-    if (!refresh_token) {
-      return new Response("Missing refresh token", { status: 400 });
+    // Parse the request body
+    let body;
+    try {
+      body = await req.json();
+    } catch (parseError) {
+      console.error("Error parsing request body:", parseError);
+      return NextResponse.json(
+        { error: "Invalid request body" },
+        { status: 400 }
+      );
     }
 
-    // 生成访问令牌
+    const { refresh_token } = body;
+
+    if (!refresh_token) {
+      console.error("Missing refresh token in request");
+      return NextResponse.json(
+        { error: "Missing refresh token" },
+        { status: 400 }
+      );
+    }
+
+    // Generate access token
     const now = Math.floor(Date.now() / 1000);
     const accessTokenPayload = {
       workspace_id: "",
       project_id: "",
       iat: now,
-      nbf: now - 10, // 允许10秒的时钟偏差
-      exp: now + 300, // 访问令牌5分钟后过期
+      nbf: now - 10, // Allow 10 seconds of clock skew
+      exp: now + 3600, // Access token expires in 1 hour
       iss: "",
       sub: "",
+      type: "anonymous"
     };
 
     const response = {
-      access_token: jwt.sign(accessTokenPayload, "your-secret-key"),
+      access_token: jwt.sign(accessTokenPayload, SECRET_KEY),
     };
 
-    return new Response(JSON.stringify(response), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-  } catch {
-    return new Response(JSON.stringify({ error: "Failed to refresh token" }), {
-      status: 500,
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
+    console.log("Token refreshed successfully");
+    return NextResponse.json(response);
+  } catch (error) {
+    console.error("Error refreshing token:", error);
+    return NextResponse.json(
+      { error: "Failed to refresh token" },
+      { status: 500 }
+    );
   }
 }

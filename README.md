@@ -16,7 +16,7 @@ This project is a playground environment for experimenting with and extending th
 
 ## Database Setup
 
-The project uses Supabase as its database backend. Below are the SQL statements to create the necessary tables:
+The project uses Supabase as its database backend for authentication. Below are the SQL statements to create the necessary tables:
 
 ### Messages Table
 ```sql
@@ -206,6 +206,44 @@ END;$function$
 ```
 
 </details>
+
+## Redis Data Storage
+
+The application uses Redis for storing threads and messages data. Here's the Redis schema:
+
+### Thread Storage
+- **Hash**: Thread metadata
+  - Key pattern: `thread:{thread_id}`
+  - Fields: id, workspace_id, created_by, updated_by, title, is_archived, external_id, metadata, created_at, updated_at, last_message_at
+
+- **Sorted Set**: User's threads
+  - Key pattern: `user:{user_id}:threads`
+  - Members: thread_id
+  - Score: timestamp (created_at)
+
+### Message Storage
+- **Hash**: Message metadata
+  - Key pattern: `message:{message_id}`
+  - Fields: id, parent_id, thread_id, created_by, updated_by, format, content, height, created_at, updated_at
+
+- **Sorted Set**: Thread's messages
+  - Key pattern: `thread:{thread_id}:messages`
+  - Members: message_id
+  - Score: timestamp (created_at)
+
+### Message Rate Limiting
+- **String**: Daily message counter
+  - Key pattern: `user:{user_id}:messages:{date}`
+  - Value: Count of messages sent by the user on the given date
+  - TTL: 48 hours
+
+### Redis Initialization
+
+Run the Redis initialization script before using the application:
+
+```bash
+npx ts-node scripts/init-redis.ts
+```
 
 ## Getting Started
 

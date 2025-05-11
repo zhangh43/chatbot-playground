@@ -4,6 +4,7 @@ import { useEffect, useCallback } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useUserStore } from "@/stores/user";
 import { useSearchParams } from "next/navigation";
+import { MessageRepository } from "@/utils/redis/message-repository";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { setUser, setLoading, loading, updateConversations } = useUserStore();
@@ -12,18 +13,64 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const checkUser = useCallback(async () => {
     setLoading(true);
     const supabase = createClient();
-    const { data, error } = await supabase.auth.getUser();
-    if (!error && data?.user) {
-      setUser(data.user);
 
-      const res = await supabase.rpc("get_message_count_by_uid", {
-        uid: data.user.id,
-      });
-      if (!res.error) {
-        updateConversations(res.data);
+    try {
+      console.log("Checking user authentication status...");
+      const { data, error } = await supabase.auth.getUser();
+
+      if (error) {
+        console.error("Authentication error:", error.message);
+        console.error("Error details:", error);
+
+        // Try to refresh the session if we got an authentication error
+        try {
+          console.log("Attempting to refresh session...");
+          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+
+          if (refreshError) {
+            console.error("Session refresh failed:", refreshError.message);
+            setLoading(false);
+            return;
+          }
+
+          if (refreshData.user) {
+            console.log("Session refreshed successfully");
+            setUser(refreshData.user);
+
+            try {
+              // Get message count for rate limiting from Redis
+              const count = await fetch('/api/storage/v1/messages/count').then(res => res.json());
+              if (count) {
+                updateConversations(count);
+              }
+            } catch (countErr) {
+              console.error("Error fetching message count:", countErr);
+            }
+          }
+        } catch (refreshErr) {
+          console.error("Exception during session refresh:", refreshErr);
+        }
+      } else if (data?.user) {
+        console.log("User authenticated successfully");
+        setUser(data.user);
+
+        try {
+          // Get message count for rate limiting from Redis
+          const count = await fetch('/api/storage/v1/messages/count').then(res => res.json());
+          if (count) {
+            updateConversations(count);
+          }
+        } catch (err) {
+          console.error("Error fetching message count:", err);
+        }
+      } else {
+        console.log("No user data available");
       }
+    } catch (exception) {
+      console.error("Unexpected exception during authentication:", exception);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [setUser, setLoading, updateConversations]);
 
   useEffect(() => {
