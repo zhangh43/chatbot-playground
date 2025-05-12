@@ -47,7 +47,7 @@ export async function GET() {
                     ...responseData,
                     error: errorText
                 });
-            } catch (e) {
+            } catch {
                 return NextResponse.json({
                     ...responseData,
                     error: 'Could not read error response'
@@ -61,18 +61,18 @@ export async function GET() {
                 ...responseData,
                 data
             });
-        } catch (e) {
+        } catch {
             return NextResponse.json({
                 ...responseData,
                 data: 'Response was not JSON'
             });
         }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Error testing Memobase connection:', error);
         return NextResponse.json({
             success: false,
-            error: error.message,
-            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error && process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
 } 

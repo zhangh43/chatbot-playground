@@ -164,7 +164,7 @@ export default function Page() {
       }
     };
     checkUser();
-  }, [user]);
+  }, [user, fetchProfile, fetchEvent]);
 
   const groupedProfiles = profiles.reduce((acc, profile) => {
     if (!acc[profile.topic]) {

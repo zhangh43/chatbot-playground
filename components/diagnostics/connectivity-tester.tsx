@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -8,7 +8,7 @@ type TestResult = {
     endpoint: string;
     status: 'success' | 'error' | 'pending';
     message: string;
-    details?: any;
+    details?: Record<string, unknown>;
     timestamp: Date;
 };
 
@@ -52,13 +52,13 @@ export default function ConnectivityTester() {
                     timestamp: new Date()
                 } : r
             ));
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error(`Error testing ${name}:`, error);
             setResults(prev => prev.map(r =>
                 r.endpoint === name ? {
                     ...r,
                     status: 'error',
-                    message: `Failed to connect: ${error.message}`,
+                    message: `Failed to connect: ${error instanceof Error ? error.message : String(error)}`,
                     timestamp: new Date()
                 } : r
             ));
@@ -85,8 +85,8 @@ export default function ConnectivityTester() {
                                 <div className="flex justify-between items-center">
                                     <h3 className="font-medium">{result.endpoint}</h3>
                                     <span className={`px-2 py-1 rounded text-sm ${result.status === 'success' ? 'bg-green-100 text-green-800' :
-                                            result.status === 'error' ? 'bg-red-100 text-red-800' :
-                                                'bg-gray-100 text-gray-800'
+                                        result.status === 'error' ? 'bg-red-100 text-red-800' :
+                                            'bg-gray-100 text-gray-800'
                                         }`}>
                                         {result.status === 'success' ? 'Success' :
                                             result.status === 'error' ? 'Failed' : 'Testing...'}

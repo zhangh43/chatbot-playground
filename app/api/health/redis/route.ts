@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getRedisClient, closeRedisConnection } from '@/utils/redis/client';
+import { getRedisClient } from '@/utils/redis/client';
 
 export const dynamic = 'force-dynamic';
 

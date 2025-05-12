@@ -1,6 +1,35 @@
 import { createClient } from "@/utils/supabase/server";
 import { getMessagesByThreadAndUser, createMessage } from "@/utils/redis/storage";
 
+// Define a proper type for message structure
+interface MessageContent {
+  role?: string;
+  content?: Array<{ type: string; text: string }> | string;
+}
+
+// Complete Message interface based on actual data structure
+interface Message {
+  id?: string;
+  content: MessageContent | string;
+  format?: string;
+  parent_id?: string | null;
+  thread_id?: string;
+  created_at?: string;
+  created_by?: string;
+  updated_by?: string;
+  updated_at?: string;
+  severity?: number;
+}
+
+// For the response data structure
+interface ResponseData {
+  messages: Message[];
+  // Define additional fields that might exist in response data
+  thread_id?: string;
+  metadata?: Record<string, string | number | boolean>;
+  [key: string]: unknown;
+}
+
 /**
  * 获取消息
  * @param thread_id 线程ID
@@ -29,11 +58,11 @@ export async function GET(
     const res = await getMessagesByThreadAndUser(data.user.id, thread_id);
 
     // Validate and fix messages before returning them
-    const responseData = res || { messages: [] };
+    const responseData: ResponseData = res || { messages: [] };
 
     // Ensure each message in the array has a valid role
     if (responseData.messages && Array.isArray(responseData.messages)) {
-      responseData.messages = responseData.messages.map((message: any) => {
+      responseData.messages = responseData.messages.map((message: Message) => {
         try {
           // Check if message content exists
           if (!message.content) {
@@ -45,27 +74,30 @@ export async function GET(
           if (typeof message.content === 'string') {
             try {
               // Try to parse JSON string
-              const parsedContent = JSON.parse(message.content);
+              const parsedContent = JSON.parse(message.content as string);
               message.content = parsedContent;
             } catch {
               // If not valid JSON, treat as user message
               message.content = {
                 role: 'user',
-                content: [{ type: 'text', text: message.content }]
+                content: [{ type: 'text', text: message.content as string }]
               };
             }
           }
 
           // Now message.content should be an object
           if (typeof message.content === 'object') {
+            const contentObj = message.content as MessageContent;
             // If role is missing or invalid, default to user
-            if (!message.content.role || !['user', 'assistant', 'system'].includes(message.content.role)) {
-              message.content.role = 'user';
+            if (!contentObj.role || !['user', 'assistant', 'system'].includes(contentObj.role)) {
+              contentObj.role = 'user';
             }
 
             // Ensure content array exists for AUI format
-            if (message.format === 'aui/v0' && (!Array.isArray(message.content.content) || message.content.content.length === 0)) {
-              message.content.content = [{ type: 'text', text: '' }];
+            if (message.format === 'aui/v0' &&
+              (!Array.isArray(contentObj.content) ||
+                contentObj.content.length === 0)) {
+              contentObj.content = [{ type: 'text', text: '' }];
             }
           }
         } catch (err) {
