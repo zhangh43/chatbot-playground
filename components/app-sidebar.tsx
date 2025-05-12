@@ -26,14 +26,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <Image
                   className="rounded"
                   src={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/logo.png`}
-                  alt="Memobase logo"
+                  alt="EloqData Logo"
                   width={38}
                   height={38}
                   priority
                 />
                 <div className="flex flex-col gap-0.5 leading-none">
-                  <span className="font-semibold">Memobase</span>
-                  <span className=""></span>
+                  <span className="font-semibold">EloqData</span>
+                  <span className="text-xs text-muted-foreground">Memobase Memory Assistant</span>
                 </div>
               </Link>
             </SidebarMenuButton>

@@ -10,8 +10,8 @@ import { LoginDialog } from "@/components/login-dialog";
 import { AuthProvider } from "@/components/auth-provider";
 
 export const metadata: Metadata = {
-  title: "Memobase - Playground",
-  description: "Memobase Playground",
+  title: "EloqData - Memory Assistant by Memobase",
+  description: "Your custom memory assistant powered by AI",
 };
 
 export default async function RootLayout({
