@@ -1,4 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
+import { getMessagesByThreadAndUser, createMessage } from "@/utils/redis/storage";
 
 /**
  * 获取消息
@@ -23,136 +24,96 @@ export async function GET(
     return new Response("Bad Request", { status: 400 });
   }
 
-  const res = await supabase.rpc("get_messages_by_thread_and_user", {
-    tid: thread_id,
-    uid: data.user.id,
-  });
+  try {
+    // Use Redis to get messages instead of Supabase RPC
+    const res = await getMessagesByThreadAndUser(data.user.id, thread_id);
 
-  if (res.error) {
+    // Validate and fix messages before returning them
+    const responseData = res || { messages: [] };
+
+    // Ensure each message in the array has a valid role
+    if (responseData.messages && Array.isArray(responseData.messages)) {
+      responseData.messages = responseData.messages.map((message: any) => {
+        try {
+          // Check if message content exists
+          if (!message.content) {
+            message.content = { role: 'user' };
+            return message;
+          }
+
+          // Handle string content by converting it to proper format
+          if (typeof message.content === 'string') {
+            try {
+              // Try to parse JSON string
+              const parsedContent = JSON.parse(message.content);
+              message.content = parsedContent;
+            } catch {
+              // If not valid JSON, treat as user message
+              message.content = {
+                role: 'user',
+                content: [{ type: 'text', text: message.content }]
+              };
+            }
+          }
+
+          // Now message.content should be an object
+          if (typeof message.content === 'object') {
+            // If role is missing or invalid, default to user
+            if (!message.content.role || !['user', 'assistant', 'system'].includes(message.content.role)) {
+              message.content.role = 'user';
+            }
+
+            // Ensure content array exists for AUI format
+            if (message.format === 'aui/v0' && (!Array.isArray(message.content.content) || message.content.content.length === 0)) {
+              message.content.content = [{ type: 'text', text: '' }];
+            }
+          }
+        } catch (err) {
+          console.error('Error processing message:', err);
+          // Provide a fallback valid message structure
+          message.content = {
+            role: 'user',
+            content: [{ type: 'text', text: 'Error loading message content' }]
+          };
+        }
+        return message;
+      });
+    }
+
+    return new Response(
+      JSON.stringify(responseData),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+  } catch (err) {
+    console.error("Error getting messages:", err);
     return new Response("Internal Server Error", { status: 500 });
   }
-
-  // Validate and fix messages before returning them
-  const responseData = res.data || { messages: [] };
-
-  // Ensure each message in the array has a valid role
-  if (responseData.messages && Array.isArray(responseData.messages)) {
-    responseData.messages = responseData.messages.map((message: any) => {
-      try {
-        // Check if message content exists
-        if (!message.content) {
-          message.content = { role: 'user' };
-          return message;
-        }
-
-        // Handle string content by converting it to proper format
-        if (typeof message.content === 'string') {
-          try {
-            // Try to parse JSON string
-            const parsedContent = JSON.parse(message.content);
-            message.content = parsedContent;
-          } catch {
-            // If not valid JSON, treat as user message
-            message.content = {
-              role: 'user',
-              content: [{ type: 'text', text: message.content }]
-            };
-          }
-        }
-
-        // Now message.content should be an object
-        if (typeof message.content === 'object') {
-          // If role is missing or invalid, default to user
-          if (!message.content.role || !['user', 'assistant', 'system'].includes(message.content.role)) {
-            message.content.role = 'user';
-          }
-
-          // Ensure content array exists for AUI format
-          if (message.format === 'aui/v0' && (!Array.isArray(message.content.content) || message.content.content.length === 0)) {
-            message.content.content = [{ type: 'text', text: '' }];
-          }
-        }
-      } catch (err) {
-        console.error('Error processing message:', err);
-        // Provide a fallback valid message structure
-        message.content = {
-          role: 'user',
-          content: [{ type: 'text', text: 'Error loading message content' }]
-        };
-      }
-      return message;
-    });
-  }
-
-  return new Response(
-    JSON.stringify(responseData),
-    {
-      status: 200,
-      headers: {
-        "Content-Type": "application/json",
-      },
-    }
-  );
 }
 
 /**
  * 创建消息
  * @param thread_id 线程ID
- * @example
- * /v1/threads/thread_03MD9BixtUBRK13thC7t83uN/messages
  * @param content 消息内容
  * @param format 消息格式
  * @param parent_id 父消息ID
  * @example
  * {
- *   "parent_id": "msg_0B22qcfrLaZGd9DW79RSu7zJ",
- *   "format": "aui/v0",
- *   "content": {
- *     "role": "user",
- *     "content": [
- *       {
- *         "type": "text",
- *         "text": "推荐几种做法"
- *       }
- *     ],
- *     "metadata": {
- *       "custom": {}
- *     }
- *   }
- * }
- * {
- *   "parent_id": "msg_0BSJLBu1xuprbS5NHXgYBbP7",
- *   "format": "aui/v0",
- *   "content": {
- *     "role": "assistant",
- *     "content": [
- *       {
- *         "type": "text",
- *              "text": "以下为你推荐几种常见又美味的面条做法：\n\n### 西红柿鸡蛋面\n- **食材准备**：面条、西红柿、鸡蛋、葱、盐、糖、生抽、食用油。\n- **做法步骤**\n    1. 鸡蛋打入碗中，搅拌均匀；西红柿洗净切块，葱切成葱花备用。\n    2. 锅中倒油，油热后倒入鸡蛋液，炒熟盛出。\n    3. 锅中再倒少许油，放入葱花爆香，加入西红柿块翻炒，炒出汤汁后加入适量盐、糖和生抽调味。\n    4. 倒入适量清水，大火煮开后放入面条，煮至面条熟透。\n    5. 最后将炒好的鸡蛋倒入锅中，搅拌均匀即可。\n\n### 红烧牛肉面\n- **食材准备**：面条、牛肉、洋葱、姜、蒜、八角、桂皮、香叶、盐、生抽、老抽、料酒、冰糖。\n- **做法步骤**\n    1. 牛肉切成小块，冷水下锅，加入料酒，焯水后捞出洗净。\n    2. 洋葱切块，姜、蒜切片备用。\n    3. 锅中倒油，放入洋葱、姜、蒜炒香，加入牛肉块翻炒均匀。\n    4. 加入生抽、老抽、料酒、冰糖、八角、桂皮、香叶，翻炒上色。\n    5. 加入适量清水，大火煮开后转小火炖煮1 - 2小时，直到牛肉软烂。\n    6. 另起锅烧水，水开后放入面条煮熟，捞出放入碗中。\n    7. 将煮好的牛肉和汤汁浇在面条上即可。\n\n### 凉拌面\n- **食材准备**：面条、黄瓜、胡萝卜、蒜、生抽、醋、盐、糖、辣椒油、香油。\n- **做法步骤**\n    1. 黄瓜、胡萝卜洗净切丝，蒜切末备用。\n    2. 锅中烧水，水开后放入面条煮熟，捞出过凉水，沥干水分后放入碗中。\n    3. 在碗中加入蒜末、生抽、醋、盐、糖、辣椒油、香油，搅拌均匀。\n    4. 放入黄瓜丝和胡萝卜丝，再次搅拌均匀即可。 "
- *          }
- *      ],
- *      "metadata": {
- *          "unstable_annotations": [],
- *          "unstable_data": [],
- *          "steps": [
- *              {
- *                  "state": "finished",
- *                  "messageId": "msg-ZWD7ZvQ3IiwWcBreiXcXQ8Pw",
- *                  "finishReason": "stop",
- *                  "usage": {
- *                      "promptTokens": null,
- *                      "completionTokens": null
- *                  },
- *                  "isContinued": false
- *              }
- *          ],
- *          "custom": {}
- *      },
- *      "status": {
- *          "type": "complete",
- *          "reason": "stop"
+ *  "content": {
+ *    "role": "user",
+ *    "content": [
+ *      {
+ *        "type": "text",
+ *        "text": "Hello!"
  *      }
- *  }
+ *    ]
+ *  },
+ *  "format": "aui/v0",
+ *  "parent_id": null
  * }
  * @returns 消息ID
  */
@@ -174,34 +135,37 @@ export async function POST(
   }
 
   // Validate message content format
+  let validatedContent = content;
   if (typeof content === 'object') {
     // Ensure a valid role is present
     if (!content.role || !['user', 'assistant', 'system'].includes(content.role)) {
-      content.role = 'user'; // Default to user if role is missing or invalid
+      validatedContent = { ...content, role: 'user' }; // Default to user if role is missing or invalid
     }
 
     // For aui/v0 format, ensure content array is present
-    if (format === 'aui/v0' && (!Array.isArray(content.content) || content.content.length === 0)) {
-      content.content = [{ type: 'text', text: '' }];
+    if (format === 'aui/v0' && (!Array.isArray(validatedContent.content) || validatedContent.content.length === 0)) {
+      validatedContent.content = [{ type: 'text', text: '' }];
     }
   }
 
-  const res = await supabase.rpc("create_message", {
-    c: content,
-    fmt: format,
-    pid: parent_id,
-    tid: thread_id,
-    uid: data.user.id,
-  });
+  try {
+    // Use Redis to create message instead of Supabase RPC
+    const result = await createMessage(
+      data.user.id,
+      thread_id,
+      parent_id,
+      format,
+      validatedContent
+    );
 
-  if (res.error) {
+    return new Response(JSON.stringify(result), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+  } catch (err) {
+    console.error("Error creating message:", err);
     return new Response("Internal Server Error", { status: 500 });
   }
-
-  return new Response(JSON.stringify(res.data), {
-    status: 200,
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
 }

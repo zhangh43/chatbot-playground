@@ -8,15 +8,30 @@
 </div>
 
 
-A playground project based on the open-source [Memobase](https://github.com/memodb-io/memobase) project, built with Supabase as the backend database.
+A playground project based on the open-source [Memobase](https://github.com/memodb-io/memobase) project, built with Supabase for authentication and Redis for data storage.
 
 ## Overview
 
 This project is a playground environment for experimenting with and extending the Memobase functionality. It provides a simplified setup for development and testing purposes.
 
-## Database Setup
+## Storage Architecture
 
-The project uses Supabase as its database backend. Below are the SQL statements to create the necessary tables:
+This project uses:
+- **Supabase** for authentication
+- **Redis** for storing threads and messages data
+
+### Redis Data Model
+
+The application uses Redis to store thread and message data with the following key structure:
+
+- `thread:{thread_id}` - Hash containing thread data
+- `message:{message_id}` - Hash containing message data
+- `thread:messages:{thread_id}` - Set containing IDs of messages in a thread
+- `user:threads:{user_id}` - Set containing IDs of threads owned by a user
+
+### Previous Database Setup (Supabase SQL)
+
+The project previously used Supabase as its database backend. Below are the SQL statements to create the necessary tables:
 
 ### Messages Table
 ```sql
@@ -232,9 +247,19 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=""   # Your Supabase anonymous key
 
 NEXT_PUBLIC_MEMOBASE_PROJECT_URL="" # Memobase project URL (if connecting to Memobase)
 NEXT_PUBLIC_MEMOBASE_API_KEY=""     # Memobase API key (if connecting to Memobase)
+
+REDIS_URL="redis://localhost:6379"  # Redis connection URL
 ```
 
 Copy the `.env.example` file to `.env` and fill in the required values for your environment.
+
+## Redis Setup
+
+The project requires a Redis instance. You can:
+
+1. Install Redis locally for development
+2. Use a cloud-hosted Redis service
+3. Run Redis in Docker: `docker run -p 6379:6379 --name redis-memobase -d redis`
 
 ## Available Scripts
 

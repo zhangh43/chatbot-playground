@@ -1,4 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
+import { getThreadsForUser, createThread } from "@/utils/redis/storage";
 
 /**
  * 获取线程列表
@@ -12,26 +13,27 @@ export async function GET() {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const res = await supabase.rpc("get_threads_for_user", {
-    uid: data.user.id,
-  });
-  if (res.error) {
+  try {
+    // Use Redis to get threads instead of Supabase RPC
+    const result = await getThreadsForUser(data.user.id);
+
+    return new Response(
+      JSON.stringify(
+        result || {
+          threads: [],
+        }
+      ),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+  } catch (err) {
+    console.error("Error getting threads:", err);
     return new Response("Internal Server Error", { status: 500 });
   }
-
-  return new Response(
-    JSON.stringify(
-      res.data || {
-        threads: [],
-      }
-    ),
-    {
-      status: 200,
-      headers: {
-        "Content-Type": "application/json",
-      },
-    }
-  );
 }
 
 /**
@@ -56,18 +58,18 @@ export async function POST(req: Request) {
     return new Response("Bad Request", { status: 400 });
   }
 
-  const res = await supabase.rpc("create_thread", {
-    last_message_at,
-    uid: data.user.id,
-  });
-  if (res.error) {
+  try {
+    // Use Redis to create thread instead of Supabase RPC
+    const result = await createThread(data.user.id, last_message_at);
+
+    return new Response(JSON.stringify(result), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+  } catch (err) {
+    console.error("Error creating thread:", err);
     return new Response("Internal Server Error", { status: 500 });
   }
-
-  return new Response(JSON.stringify(res.data), {
-    status: 200,
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
 }

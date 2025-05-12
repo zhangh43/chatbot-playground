@@ -1,4 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
+import { updateThreadArchived } from "@/utils/redis/storage";
 
 /**
  * 修改消息状态
@@ -25,19 +26,18 @@ export async function PUT(req: Request, { params }: { params: Promise<{ thread_i
     return new Response("Bad Request", { status: 400 });
   }
 
-  const res = await supabase.rpc("update_thread_archived", {
-    thread_id: thread_id,
-    archived: is_archived,
-    uid: data.user.id,
-  });
-  if (res.error) {
+  try {
+    // Use Redis to update thread archived status instead of Supabase RPC
+    const result = await updateThreadArchived(data.user.id, thread_id, is_archived);
+
+    return new Response(JSON.stringify(result), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+  } catch (err) {
+    console.error("Error updating thread archived status:", err);
     return new Response("Internal Server Error", { status: 500 });
   }
-
-  return new Response(JSON.stringify(res), {
-    status: 200,
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
 }
