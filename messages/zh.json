@@ -13,7 +13,7 @@
     "createAccount": "创建账号",
     "createAccountDesc": "输入您的邮箱和密码进行注册",
     "welcomeBack": "欢迎回来",
-    "welcomeBackDesc": "使用 Google 或 GitHub 账号登录",
+    "welcomeBackDesc": "请使用邮箱账号登录",
     "orLoginWithEmail": "或者使用邮箱登录",
     "alreadyHaveAccount": "已有账号？",
     "noAccount": "还没有账号？",

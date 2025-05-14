@@ -13,7 +13,7 @@
     "createAccount": "Create Account",
     "createAccountDesc": "Enter your email and password to register",
     "welcomeBack": "Welcome Back",
-    "welcomeBackDesc": "Sign in with Google or GitHub",
+    "welcomeBackDesc": "Sign in with Email",
     "orLoginWithEmail": "Or sign in with email",
     "alreadyHaveAccount": "Already have an account?",
     "noAccount": "Don't have an account?",
